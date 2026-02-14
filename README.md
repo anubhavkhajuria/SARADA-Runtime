@@ -226,3 +226,7 @@ You can use `docker-compose.yml` from this repo:
 ```bash
 docker compose run --rm sarada
 ```
+
+## Creator and Support
+
+For any questions or suggestions, visit [https://anubhavkhajuria.github.io/site](https://anubhavkhajuria.github.io/site) or contact anubhavkhajuria5@gmail.com.
