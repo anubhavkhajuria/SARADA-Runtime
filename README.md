@@ -1,6 +1,6 @@
 # SARADA: Software Architecture for RISCV Driven AI Workloads
 
-SARADA is distributed as a runtime Docker image for using the RICE compiler stack without exposing compiler source code in this repository.
+SARADA is distributed as a runtime Docker image for using the RICE compiler stack on RISC-V AI workloads.
 
 This repository contains runtime usage files only.
 
@@ -13,6 +13,38 @@ This repository contains runtime usage files only.
   - `torch_rice` runtime package
   - RISC-V cross compilation and QEMU support
 - Docker commands to run lowering and validation workflows
+
+## RICE Runtime Capabilities
+
+SARADA runtime includes the main RICE functionality:
+
+- Torch to RICE conversion passes:
+  - `convert-torch-to-rice`
+  - `convert-rice-to-linalg`
+- Automatic lowering pipeline:
+  - Torch IR
+  - RICE dialect IR
+  - Linalg IR
+  - LLVM IR
+  - RISC-V assembly
+- Automatic fusion support:
+  - Linalg elementwise fusion path
+  - Fusion on/off control with `enable_linalg_fusion`
+- Vectorization support:
+  - `vectorization_mode=\"aggressive\"` for RVV-oriented codegen
+  - `vectorization_mode=\"none\"` for scalar-only codegen
+- Built-in QEMU execution flow:
+  - Compile to RISC-V object/executable
+  - Execute with QEMU user-mode backend
+  - Compare outputs against eager PyTorch
+- Transformer-oriented operator coverage:
+  - attention-like patterns
+  - GELU, layernorm-related patterns
+  - 2D and higher-rank/batched matmul shapes
+- Artifact generation:
+  - intermediate MLIR stages
+  - generated `model.s` assembly
+  - runtime inputs/outputs for reproducibility
 
 ## Runtime Image Distribution
 
@@ -194,7 +226,3 @@ You can use `docker-compose.yml` from this repo:
 ```bash
 docker compose run --rm sarada
 ```
-
-## Intellectual Property Notice
-
-This repository intentionally does not publish compiler source code. It is runtime-only distribution material for executing and evaluating SARADA/RICE workflows.
