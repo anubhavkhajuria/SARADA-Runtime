@@ -57,7 +57,7 @@ jobs:
       - name: Build image
         run: |
           set -euo pipefail
-          docker build --build-arg BASE_IMAGE=sarada:latest -t sarada:ci .
+          docker build --platform linux/arm64 --build-arg BASE_IMAGE=sarada:latest -t sarada:ci .
 
       - name: Smoke test image
         run: |
