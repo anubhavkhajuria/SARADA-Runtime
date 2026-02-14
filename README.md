@@ -14,7 +14,7 @@ This repository contains runtime usage files only.
   - RISC-V cross compilation and QEMU support
 - Docker commands to run lowering and validation workflows
 
-## RICE Runtime Capabilities
+## RICE Capabilities
 
 SARADA runtime includes the main RICE functionality:
 
@@ -46,36 +46,36 @@ SARADA runtime includes the main RICE functionality:
   - generated `model.s` assembly
   - runtime inputs/outputs for reproducibility
 
-## Runtime Image Distribution
+## Image Distribution
 
 Release asset name:
 
-- `sarada-runtime-linux-arm64.tar.gz`
+- `sarada-linux-arm64.tar.gz`
 
 ## Linux and macOS Setup
 
 1. Download runtime image tar from Releases
 
 ```bash
-curl -L -o sarada-runtime-linux-arm64.tar.gz \
-  https://github.com/anubhavkhajuria/SARADA-Runtime/releases/download/v1.0.0/sarada-runtime-linux-arm64.tar.gz
+curl -L -o sarada-linux-arm64.tar.gz \
+  https://github.com/anubhavkhajuria/SARADA/releases/download/v1.0.0/sarada-linux-arm64.tar.gz
 
-curl -L -o sarada-runtime-linux-arm64.tar.gz.sha256 \
-  https://github.com/anubhavkhajuria/SARADA-Runtime/releases/download/v1.0.0/sarada-runtime-linux-arm64.tar.gz.sha256
+curl -L -o sarada-linux-arm64.sha256 \
+  https://github.com/anubhavkhajuria/SARADA/releases/download/v1.0.0/sarada-linux-arm64.sha256
 
-shasum -a 256 -c sarada-runtime-linux-arm64.tar.gz.sha256
+shasum -a 256 -c sarada-linux-arm64.sha256
 ```
 
 2. Load image into Docker
 
 ```bash
-gunzip -c sarada-runtime-linux-arm64.tar.gz | docker load
+gunzip -c sarada-linux-arm64.tar.gz | docker load
 ```
 
 3. Run interactive shell
 
 ```bash
-docker run --rm -it sarada-runtime:latest bash
+docker run --rm -it sarada:latest bash
 ```
 
 Notes:
@@ -84,13 +84,13 @@ Notes:
 - Intel macOS/Linux can run with emulation:
 
 ```bash
-docker run --rm -it --platform linux/arm64 sarada-runtime:latest bash
+docker run --rm -it --platform linux/arm64 sarada:latest bash
 ```
 
 ## Verify RICE Passes Are Available
 
 ```bash
-docker run --rm sarada-runtime:latest \
+docker run --rm sarada:latest \
   bash -lc 'torch-mlir-opt --help | grep -E "convert-torch-to-rice|convert-rice-to-linalg"'
 ```
 
@@ -99,7 +99,7 @@ docker run --rm sarada-runtime:latest \
 ### 1) Matmul lowering with vectorization
 
 ```bash
-docker run --rm -it sarada-runtime:latest python - <<'PY'
+docker run --rm -it sarada:latest python - <<'PY'
 import torch
 from torch_rice import RICERISCVBackend
 
@@ -129,7 +129,7 @@ PY
 ### 2) Conv2D lowering with and without vectorization
 
 ```bash
-docker run --rm -it sarada-runtime:latest python - <<'PY'
+docker run --rm -it sarada:latest python - <<'PY'
 import torch
 from torch_rice import RICERISCVBackend
 
@@ -151,7 +151,7 @@ PY
 ### 3) 4D batched matmul with and without vectorization
 
 ```bash
-docker run --rm -it sarada-runtime:latest python - <<'PY'
+docker run --rm -it sarada:latest python - <<'PY'
 import torch
 from torch_rice import RICERISCVBackend
 
@@ -176,7 +176,7 @@ PY
 ### 4) Transformer operators with and without fusion, and with and without vectorization
 
 ```bash
-docker run --rm -it sarada-runtime:latest python - <<'PY'
+docker run --rm -it sarada:latest python - <<'PY'
 import torch
 import torch.nn as nn
 from torch_rice import RICERISCVBackend

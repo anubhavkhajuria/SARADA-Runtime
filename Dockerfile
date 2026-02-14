@@ -1,1 +1,1 @@
-FROM sarada-runtime:latest
+FROM sarada:latest

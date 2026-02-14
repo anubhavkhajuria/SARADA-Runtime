@@ -1,7 +1,7 @@
 services:
   sarada:
-    image: sarada-runtime:latest
-    container_name: sarada-runtime
+    image: sarada:latest
+    container_name: sarada
     stdin_open: true
     tty: true
     working_dir: /opt/sarada
