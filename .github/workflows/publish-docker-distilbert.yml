@@ -50,16 +50,16 @@ jobs:
           set -euo pipefail
           docker run --rm --platform linux/arm64 sarada-distilbert:ci \
             python3 - <<'PY'
-import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-name = "distilbert-base-uncased-finetuned-sst-2-english"
-tokenizer = AutoTokenizer.from_pretrained(name)
-model = AutoModelForSequenceClassification.from_pretrained(name).eval()
-enc = tokenizer("This is not a good pizza, instead this is the best", return_tensors="pt")
-with torch.no_grad():
-    logits = model(**enc).logits
-print(int(logits.argmax(-1).item()))
-PY
+          import torch
+          from transformers import AutoTokenizer, AutoModelForSequenceClassification
+          name = "distilbert-base-uncased-finetuned-sst-2-english"
+          tokenizer = AutoTokenizer.from_pretrained(name)
+          model = AutoModelForSequenceClassification.from_pretrained(name).eval()
+          enc = tokenizer("This is not a good pizza, instead this is the best", return_tensors="pt")
+          with torch.no_grad():
+              logits = model(**enc).logits
+          print(int(logits.argmax(-1).item()))
+          PY
 
       - name: Push image
         run: |
