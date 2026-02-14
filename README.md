@@ -1,12 +1,12 @@
 # SARADA: Software Architecture for RISCV Driven AI Workloads
 
-SARADA is distributed as a runtime Docker image for using the RICE compiler stack on RISC-V AI workloads.
+SARADA is distributed as a Docker image for using the RICE compiler stack on RISC-V AI workloads.
 
-This repository contains runtime usage files only.
+This repository contains usage files only.
 
 ## What You Get
 
-- Prebuilt Docker runtime image with:
+- Prebuilt Docker image with:
   - LLVM/MLIR tools
   - torch-mlir
   - RICE pass plugin
@@ -54,14 +54,14 @@ Release asset name:
 
 ## Linux and macOS Setup
 
-1. Download runtime image tar from Releases
+1. Download image tar from Releases
 
 ```bash
 curl -L -o sarada-linux-arm64.tar.gz \
-  https://github.com/anubhavkhajuria/SARADA/releases/download/v1.0.0/sarada-linux-arm64.tar.gz
+  https://github.com/anubhavkhajuria/SARADA/releases/download/v1.0.1/sarada-linux-arm64.tar.gz
 
 curl -L -o sarada-linux-arm64.sha256 \
-  https://github.com/anubhavkhajuria/SARADA/releases/download/v1.0.0/sarada-linux-arm64.sha256
+  https://github.com/anubhavkhajuria/SARADA/releases/download/v1.0.1/sarada-linux-arm64.sha256
 
 shasum -a 256 -c sarada-linux-arm64.sha256
 ```
