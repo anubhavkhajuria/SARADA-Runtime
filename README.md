@@ -1,6 +1,6 @@
 # SARADA: Software Architecture for RISCV Driven AI Workloads
 
-SARADA is distributed as a Docker image for using the RICE compiler stack on RISC-V AI workloads.
+SARADA is a custom MLIR dialect and compiler pipeline that bridges the semantic gap between PyTorch and RISC-V Vector (RVV) hardware. SARADA maintains the high-level intent of operators such as Attention and Softmax to avoid scalarization that often occurs with generic compilers and produces optimized Vector Length Agnostic Assembly Code.
 
 This repository contains usage files only.
 
