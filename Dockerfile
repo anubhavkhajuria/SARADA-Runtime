@@ -1,1 +1,2 @@
-FROM sarada:latest
+ARG BASE_IMAGE=sarada:latest
+FROM ${BASE_IMAGE}

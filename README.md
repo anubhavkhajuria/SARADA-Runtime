@@ -52,6 +52,27 @@ Release asset name:
 
 - `sarada-linux-arm64.tar.gz`
 
+## GitHub Packages Image
+
+This repository includes `.github/workflows/publish-docker.yml` to build, test, and push the Docker image to GitHub Container Registry:
+
+- `ghcr.io/anubhavkhajuria/sarada:latest`
+
+Manual trigger:
+
+```bash
+gh workflow run "Publish Docker Container" \
+  --repo anubhavkhajuria/SARADA \
+  -f release_tag=v1.0.1
+```
+
+Pull and run:
+
+```bash
+docker pull ghcr.io/anubhavkhajuria/sarada:latest
+docker run --rm -it --platform linux/arm64 ghcr.io/anubhavkhajuria/sarada:latest bash
+```
+
 ## Linux and macOS Setup
 
 1. Download image tar from Releases

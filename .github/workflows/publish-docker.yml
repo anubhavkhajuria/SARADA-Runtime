@@ -1,0 +1,88 @@
+name: Publish Docker Container
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag containing sarada-linux-arm64.tar.gz
+        required: false
+        default: v1.0.1
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-test-push:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/sarada
+      RELEASE_ASSET: sarada-linux-arm64.tar.gz
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: vars
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${{ github.event.inputs.release_tag }}" ]]; then
+            echo "release_tag=${{ github.event.inputs.release_tag }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "release_tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_tag=v1.0.1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup QEMU for arm64 smoke tests
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Download base image tar
+        run: |
+          set -euo pipefail
+          curl -L -o "${RELEASE_ASSET}" \
+            "https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.release_tag }}/${RELEASE_ASSET}"
+
+      - name: Load base image
+        run: |
+          set -euo pipefail
+          gunzip -c "${RELEASE_ASSET}" | docker load
+          docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep '^sarada:latest '
+
+      - name: Build image
+        run: |
+          set -euo pipefail
+          docker build --build-arg BASE_IMAGE=sarada:latest -t sarada:ci .
+
+      - name: Smoke test image
+        run: |
+          set -euo pipefail
+          docker run --rm --platform linux/arm64 sarada:ci \
+            bash -lc 'torch-mlir-opt --help | grep -E "convert-torch-to-rice|convert-rice-to-linalg"'
+          docker run --rm --platform linux/arm64 sarada:ci \
+            python3 -c "import torch, torch_rice; print('torch', torch.__version__); print('has_backend', hasattr(torch_rice, 'RICERISCVBackend'))"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::7}"
+          docker tag sarada:ci "${IMAGE_NAME}:latest"
+          docker tag sarada:ci "${IMAGE_NAME}:${SHORT_SHA}"
+          docker push "${IMAGE_NAME}:latest"
+          docker push "${IMAGE_NAME}:${SHORT_SHA}"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            docker tag sarada:ci "${IMAGE_NAME}:${GITHUB_REF_NAME}"
+            docker push "${IMAGE_NAME}:${GITHUB_REF_NAME}"
+          fi
