@@ -3,10 +3,14 @@ name: Publish Docker Container
 on:
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: Release tag containing sarada-linux-arm64.tar.gz
+      rice_repo:
+        description: Source repository used to build SARADA
         required: false
-        default: v1.0.1
+        default: https://github.com/BrainSeek-Lab/torch-mlir-rice.git
+      rice_ref:
+        description: Source ref (branch, tag, or commit)
+        required: false
+        default: main
   push:
     tags:
       - "v*"
@@ -20,52 +24,32 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/sarada
-      RELEASE_ASSET: sarada-linux-arm64.tar.gz
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Resolve release tag
+      - name: Resolve source inputs
         id: vars
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${{ github.event.inputs.release_tag }}" ]]; then
-            echo "release_tag=${{ github.event.inputs.release_tag }}" >> "$GITHUB_OUTPUT"
-          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            echo "release_tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          else
-            echo "release_tag=v1.0.1" >> "$GITHUB_OUTPUT"
+          REPO_INPUT="${{ github.event.inputs.rice_repo }}"
+          REF_INPUT="${{ github.event.inputs.rice_ref }}"
+          if [[ -z "${REPO_INPUT}" ]]; then
+            REPO_INPUT="https://github.com/BrainSeek-Lab/torch-mlir-rice.git"
           fi
+          if [[ -z "${REF_INPUT}" ]]; then
+            REF_INPUT="main"
+          fi
+          echo "rice_repo=${REPO_INPUT}" >> "$GITHUB_OUTPUT"
+          echo "rice_ref=${REF_INPUT}" >> "$GITHUB_OUTPUT"
 
-      - name: Setup QEMU for arm64 smoke tests
+      - name: Setup QEMU
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
 
-      - name: Download base image tar
-        run: |
-          set -euo pipefail
-          curl -L -o "${RELEASE_ASSET}" \
-            "https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.release_tag }}/${RELEASE_ASSET}"
-
-      - name: Load base image
-        run: |
-          set -euo pipefail
-          gunzip -c "${RELEASE_ASSET}" | docker load
-          docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep '^sarada:latest '
-
-      - name: Build image
-        run: |
-          set -euo pipefail
-          docker build --platform linux/arm64 --build-arg BASE_IMAGE=sarada:latest -t sarada:ci .
-
-      - name: Smoke test image
-        run: |
-          set -euo pipefail
-          docker run --rm --platform linux/arm64 sarada:ci \
-            bash -lc 'torch-mlir-opt --help | grep -E "convert-torch-to-rice|convert-rice-to-linalg"'
-          docker run --rm --platform linux/arm64 sarada:ci \
-            python3 -c "import torch, torch_rice; print('torch', torch.__version__); print('has_backend', hasattr(torch_rice, 'RICERISCVBackend'))"
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -74,15 +58,35 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push image
+      - name: Build amd64 smoke image
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --platform linux/amd64 \
+            --build-arg RICE_REPO="${{ steps.vars.outputs.rice_repo }}" \
+            --build-arg RICE_REF="${{ steps.vars.outputs.rice_ref }}" \
+            --load \
+            -t sarada:ci .
+
+      - name: Smoke test amd64 image
+        run: |
+          set -euo pipefail
+          docker run --rm sarada:ci \
+            bash -lc 'torch-mlir-opt --help | grep -E "convert-torch-to-rice|convert-rice-to-linalg"'
+          docker run --rm sarada:ci \
+            python3 -c "import torch, torch_rice; print('torch', torch.__version__); print('has_backend', hasattr(torch_rice, 'RICERISCVBackend'))"
+
+      - name: Build and push multi-arch image
         run: |
           set -euo pipefail
           SHORT_SHA="${GITHUB_SHA::7}"
-          docker tag sarada:ci "${IMAGE_NAME}:latest"
-          docker tag sarada:ci "${IMAGE_NAME}:${SHORT_SHA}"
-          docker push "${IMAGE_NAME}:latest"
-          docker push "${IMAGE_NAME}:${SHORT_SHA}"
+          TAG_ARGS="-t ${IMAGE_NAME}:latest -t ${IMAGE_NAME}:${SHORT_SHA}"
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            docker tag sarada:ci "${IMAGE_NAME}:${GITHUB_REF_NAME}"
-            docker push "${IMAGE_NAME}:${GITHUB_REF_NAME}"
+            TAG_ARGS="${TAG_ARGS} -t ${IMAGE_NAME}:${GITHUB_REF_NAME}"
           fi
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg RICE_REPO="${{ steps.vars.outputs.rice_repo }}" \
+            --build-arg RICE_REF="${{ steps.vars.outputs.rice_ref }}" \
+            ${TAG_ARGS} \
+            --push .

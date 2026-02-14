@@ -3,10 +3,10 @@ name: Publish DistilBERT Docker Container
 on:
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: Release tag containing sarada-linux-arm64.tar.gz
+      base_tag:
+        description: Base SARADA image tag from GHCR
         required: false
-        default: v1.0.1
+        default: latest
   push:
     tags:
       - "v*"
@@ -19,40 +19,29 @@ jobs:
   build-test-push:
     runs-on: ubuntu-latest
     env:
+      BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/sarada
       IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/sarada-distilbert
-      RELEASE_ASSET: sarada-linux-arm64.tar.gz
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Resolve release tag
+      - name: Resolve base tag
         id: vars
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${{ github.event.inputs.release_tag }}" ]]; then
-            echo "release_tag=${{ github.event.inputs.release_tag }}" >> "$GITHUB_OUTPUT"
-          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            echo "release_tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          else
-            echo "release_tag=v1.0.1" >> "$GITHUB_OUTPUT"
+          BASE_TAG_INPUT="${{ github.event.inputs.base_tag }}"
+          if [[ -z "${BASE_TAG_INPUT}" ]]; then
+            BASE_TAG_INPUT="latest"
           fi
+          echo "base_tag=${BASE_TAG_INPUT}" >> "$GITHUB_OUTPUT"
 
-      - name: Setup QEMU for arm64 smoke tests
+      - name: Setup QEMU
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
 
-      - name: Download base image tar
-        run: |
-          set -euo pipefail
-          curl -L -o "${RELEASE_ASSET}" \
-            "https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.release_tag }}/${RELEASE_ASSET}"
-
-      - name: Load base image
-        run: |
-          set -euo pipefail
-          gunzip -c "${RELEASE_ASSET}" | docker load
-          docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep '^sarada:latest '
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -61,29 +50,38 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build image
+      - name: Pull base image
         run: |
           set -euo pipefail
-          docker build --platform linux/arm64 \
-            --build-arg BASE_IMAGE=sarada:latest \
+          docker pull "${BASE_IMAGE}:${{ steps.vars.outputs.base_tag }}"
+
+      - name: Build amd64 smoke image
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --platform linux/amd64 \
+            --build-arg BASE_IMAGE="${BASE_IMAGE}:${{ steps.vars.outputs.base_tag }}" \
+            --load \
             -f Dockerfile.distilbert \
             -t sarada-distilbert:ci .
 
-      - name: Smoke test image
+      - name: Smoke test amd64 image
         run: |
           set -euo pipefail
-          docker run --rm --platform linux/arm64 sarada-distilbert:ci \
+          docker run --rm sarada-distilbert:ci \
             python3 -c "import torch; from transformers import AutoTokenizer, AutoModelForSequenceClassification; n='distilbert-base-uncased-finetuned-sst-2-english'; t=AutoTokenizer.from_pretrained(n); m=AutoModelForSequenceClassification.from_pretrained(n).eval(); e=t('This is not a good pizza, instead this is the best', return_tensors='pt'); p=int(m(**e).logits.argmax(-1).item()); print(p)"
 
-      - name: Push image
+      - name: Build and push multi-arch image
         run: |
           set -euo pipefail
           SHORT_SHA="${GITHUB_SHA::7}"
-          docker tag sarada-distilbert:ci "${IMAGE_NAME}:latest"
-          docker tag sarada-distilbert:ci "${IMAGE_NAME}:${SHORT_SHA}"
-          docker push "${IMAGE_NAME}:latest"
-          docker push "${IMAGE_NAME}:${SHORT_SHA}"
+          TAG_ARGS="-t ${IMAGE_NAME}:latest -t ${IMAGE_NAME}:${SHORT_SHA}"
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            docker tag sarada-distilbert:ci "${IMAGE_NAME}:${GITHUB_REF_NAME}"
-            docker push "${IMAGE_NAME}:${GITHUB_REF_NAME}"
+            TAG_ARGS="${TAG_ARGS} -t ${IMAGE_NAME}:${GITHUB_REF_NAME}"
           fi
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg BASE_IMAGE="${BASE_IMAGE}:${{ steps.vars.outputs.base_tag }}" \
+            -f Dockerfile.distilbert \
+            ${TAG_ARGS} \
+            --push .

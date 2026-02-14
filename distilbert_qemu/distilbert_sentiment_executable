@@ -8,8 +8,15 @@ fi
 
 prompt="$*"
 image="${SARADA_DISTILBERT_IMAGE:-ghcr.io/anubhavkhajuria/sarada-distilbert:latest}"
+platform="${SARADA_DOCKER_PLATFORM:-}"
 
-docker run --rm -i --pull=missing "$image" python3 - "$prompt" <<'PY'
+run_cmd=(docker run --rm -i --pull=missing)
+if [ -n "$platform" ]; then
+  run_cmd+=(--platform "$platform")
+fi
+run_cmd+=("$image" python3 - "$prompt")
+
+"${run_cmd[@]}" <<'PY'
 import sys
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification

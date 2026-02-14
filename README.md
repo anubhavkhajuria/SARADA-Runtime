@@ -46,12 +46,6 @@ SARADA runtime includes the main RICE functionality:
   - generated `model.s` assembly
   - runtime inputs/outputs for reproducibility
 
-## Image Distribution
-
-Release asset name:
-
-- `sarada-linux-arm64.tar.gz`
-
 ## GitHub Packages Image
 
 This repository includes `.github/workflows/publish-docker.yml` to build, test, and push the Docker image to GitHub Container Registry:
@@ -67,7 +61,8 @@ Manual trigger:
 ```bash
 gh workflow run "Publish Docker Container" \
   --repo anubhavkhajuria/SARADA \
-  -f release_tag=v1.0.1
+  -f rice_repo=https://github.com/BrainSeek-Lab/torch-mlir-rice.git \
+  -f rice_ref=main
 ```
 
 DistilBERT image trigger:
@@ -75,57 +70,47 @@ DistilBERT image trigger:
 ```bash
 gh workflow run "Publish DistilBERT Docker Container" \
   --repo anubhavkhajuria/SARADA \
-  -f release_tag=v1.0.1
+  -f base_tag=latest
 ```
 
 Pull and run:
 
 ```bash
 docker pull ghcr.io/anubhavkhajuria/sarada:latest
-docker run --rm -it --platform linux/arm64 ghcr.io/anubhavkhajuria/sarada:latest bash
+docker run --rm -it ghcr.io/anubhavkhajuria/sarada:latest bash
 ```
 
 For DistilBERT sentiment runtime:
 
 ```bash
 docker pull ghcr.io/anubhavkhajuria/sarada-distilbert:latest
-docker run --rm -it --platform linux/arm64 ghcr.io/anubhavkhajuria/sarada-distilbert:latest bash
+docker run --rm -it ghcr.io/anubhavkhajuria/sarada-distilbert:latest bash
 ```
 
 ## Linux and macOS Setup
 
-1. Download image tar from Releases
+1. Pull the image from GHCR
 
 ```bash
-curl -L -o sarada-linux-arm64.tar.gz \
-  https://github.com/anubhavkhajuria/SARADA/releases/download/v1.0.1/sarada-linux-arm64.tar.gz
-
-curl -L -o sarada-linux-arm64.sha256 \
-  https://github.com/anubhavkhajuria/SARADA/releases/download/v1.0.1/sarada-linux-arm64.sha256
-
-shasum -a 256 -c sarada-linux-arm64.sha256
+docker pull ghcr.io/anubhavkhajuria/sarada:latest
 ```
 
-2. Load image into Docker
+2. Run interactive shell
 
 ```bash
-gunzip -c sarada-linux-arm64.tar.gz | docker load
+docker run --rm -it ghcr.io/anubhavkhajuria/sarada:latest bash
 ```
 
-3. Run interactive shell
+3. Explicit architecture selection (optional)
 
 ```bash
-docker run --rm -it sarada:latest bash
+docker run --rm -it --platform linux/amd64 ghcr.io/anubhavkhajuria/sarada:latest bash
+docker run --rm -it --platform linux/arm64 ghcr.io/anubhavkhajuria/sarada:latest bash
 ```
 
 Notes:
 
-- Apple Silicon macOS and ARM Linux run this image natively.
-- Intel macOS/Linux can run with emulation:
-
-```bash
-docker run --rm -it --platform linux/arm64 sarada:latest bash
-```
+- The SARADA and DistilBERT images are published for both `linux/amd64` and `linux/arm64`.
 
 ## Verify RICE Passes Are Available
 
@@ -151,6 +136,13 @@ To override image:
 
 ```bash
 SARADA_DISTILBERT_IMAGE=sarada-distilbert:latest \
+./distilbert_qemu/distilbert_sentiment_executable "I do not hate this movie"
+```
+
+To force a specific Docker platform:
+
+```bash
+SARADA_DOCKER_PLATFORM=linux/amd64 \
 ./distilbert_qemu/distilbert_sentiment_executable "I do not hate this movie"
 ```
 
