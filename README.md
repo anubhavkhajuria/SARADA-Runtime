@@ -115,8 +115,62 @@ Notes:
 ## Verify RICE Passes Are Available
 
 ```bash
-docker run --rm sarada:latest \
+docker run --rm ghcr.io/anubhavkhajuria/sarada:latest \
   bash -lc 'torch-mlir-opt --help | grep -E "convert-torch-to-rice|convert-rice-to-linalg"'
+```
+
+## Verify RICE Compiler on x86 and Apple Silicon
+
+x86_64 validation:
+
+```bash
+docker run --rm --platform linux/amd64 ghcr.io/anubhavkhajuria/sarada:latest \
+  bash -lc 'python3 - <<'"'"'PY'"'"'
+import torch
+from torch_rice import RICERISCVBackend
+
+class Smoke(torch.nn.Module):
+    def forward(self, x):
+        return x + 1
+
+m = Smoke().eval()
+x = torch.randn(2, 4)
+b = RICERISCVBackend(
+    use_rice=True,
+    execution_mode="riscv",
+    vectorization_mode="none",
+    enable_linalg_fusion=True,
+)
+c = b.compile(m, x, func_name="smoke_add")
+asm = c.get_riscv_assembly() or ""
+print("asm_non_empty=", bool(asm))
+PY'
+```
+
+Apple Silicon validation:
+
+```bash
+docker run --rm --platform linux/arm64 ghcr.io/anubhavkhajuria/sarada:latest \
+  bash -lc 'python3 - <<'"'"'PY'"'"'
+import torch
+from torch_rice import RICERISCVBackend
+
+class Smoke(torch.nn.Module):
+    def forward(self, x):
+        return x + 1
+
+m = Smoke().eval()
+x = torch.randn(2, 4)
+b = RICERISCVBackend(
+    use_rice=True,
+    execution_mode="riscv",
+    vectorization_mode="none",
+    enable_linalg_fusion=True,
+)
+c = b.compile(m, x, func_name="smoke_add")
+asm = c.get_riscv_assembly() or ""
+print("asm_non_empty=", bool(asm))
+PY'
 ```
 
 ## Usage Examples

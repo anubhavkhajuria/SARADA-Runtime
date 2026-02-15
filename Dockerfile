@@ -57,6 +57,56 @@ RUN git clone --depth 1 --branch "${RICE_REF}" "${RICE_REPO}" /workspace/torch-m
 
 WORKDIR /workspace/torch-mlir-rice
 
+RUN python - <<'PY'
+from pathlib import Path
+
+p = Path("/workspace/torch-mlir-rice/torch_rice/backend.py")
+text = p.read_text()
+if "torch_mlir_opt_full" in text:
+    print("backend patch already present")
+else:
+    old = """                # Step 3c: Keep RICE in the real compilation path, then lower residual torch ops.
+                result = subprocess.run(
+                    [
+                        torch_mlir_opt,
+                        "--convert-torch-to-rice",
+                        "--convert-rice-to-linalg",
+                        "--torch-backend-to-linalg-on-tensors-backend-pipeline",
+                        torch_mlir_path,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=240,
+                )
+                if result.returncode != 0:
+                    raise RuntimeError(f"Torch->RICE->Linalg pipeline failed: {result.stderr}")
+"""
+    new = """                # Step 3c: Lower full Torch program with full torch-mlir toolchain.
+                torch_mlir_opt_full = os.environ.get(
+                    "TORCH_MLIR_OPT_FULL_PATH",
+                    "/usr/local/lib/python3.11/site-packages/torch_mlir/_mlir_libs/torch-mlir-opt",
+                )
+                if not os.path.exists(torch_mlir_opt_full):
+                    torch_mlir_opt_full = torch_mlir_opt
+                result = subprocess.run(
+                    [
+                        torch_mlir_opt_full,
+                        "--torch-backend-to-linalg-on-tensors-backend-pipeline",
+                        torch_mlir_path,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=240,
+                )
+                if result.returncode != 0:
+                    raise RuntimeError(f"Torch backend->Linalg pipeline failed: {result.stderr}")
+"""
+    if old not in text:
+        raise RuntimeError("Could not find expected Step 3c block in torch_rice/backend.py")
+    p.write_text(text.replace(old, new, 1))
+    print("applied backend Step 3c patch")
+PY
+
 RUN python -m pip install --upgrade pip setuptools wheel \
  && python -m pip install --retries 10 --timeout 120 --pre torch torchvision \
       --index-url https://download.pytorch.org/whl/nightly/cpu \
@@ -81,6 +131,28 @@ RUN rm -rf /workspace/torch-mlir-rice/examples \
  && (command -v llc-21 || command -v llc || command -v llc-14) \
  && (command -v opt-21 || command -v opt || command -v opt-14) \
  && command -v qemu-riscv64 \
- && python -c "import torch, torch_mlir, torchvision, timm, numpy, cv2, torch_rice"
+ && python -c "import torch, torch_mlir, torchvision, timm, numpy, cv2, torch_rice" \
+ && python - <<'PY'
+import torch
+from torch_rice import RICERISCVBackend
+
+class _Smoke(torch.nn.Module):
+    def forward(self, x):
+        return x + 1
+
+m = _Smoke().eval()
+x = torch.randn(2, 4)
+b = RICERISCVBackend(
+    use_rice=True,
+    execution_mode="riscv",
+    vectorization_mode="none",
+    enable_linalg_fusion=True,
+)
+c = b.compile(m, x, func_name="smoke_add")
+asm = c.get_riscv_assembly() or ""
+if not asm:
+    raise RuntimeError("RICE smoke compile produced empty assembly")
+print("RICE compiler smoke passed")
+PY
 
 CMD ["bash"]

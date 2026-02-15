@@ -69,13 +69,75 @@ jobs:
             --build-arg BASE_IMAGE="${BASE_IMAGE}:${{ steps.vars.outputs.base_tag }}" \
             --load \
             -f Dockerfile.distilbert \
-            -t sarada-distilbert:ci .
+            -t sarada-distilbert:ci-amd64 .
 
       - name: Smoke test amd64 image
         run: |
           set -euo pipefail
-          docker run --rm sarada-distilbert:ci \
+          docker run --rm sarada-distilbert:ci-amd64 \
             python3 -c "import torch; from transformers import AutoTokenizer, AutoModelForSequenceClassification; n='distilbert-base-uncased-finetuned-sst-2-english'; t=AutoTokenizer.from_pretrained(n); m=AutoModelForSequenceClassification.from_pretrained(n).eval(); e=t('This is not a good pizza, instead this is the best', return_tensors='pt'); p=int(m(**e).logits.argmax(-1).item()); print(p)"
+          docker run --rm sarada-distilbert:ci-amd64 bash -lc '
+            torch-mlir-opt --help | grep -E "convert-torch-to-rice|convert-rice-to-linalg"
+            python3 - <<'"'"'PY'"'"'
+import torch
+from torch_rice import RICERISCVBackend
+
+class Smoke(torch.nn.Module):
+    def forward(self, x):
+        return x + 1
+
+m = Smoke().eval()
+x = torch.randn(2, 4)
+b = RICERISCVBackend(
+    use_rice=True,
+    execution_mode="riscv",
+    vectorization_mode="none",
+    enable_linalg_fusion=True,
+)
+c = b.compile(m, x, func_name="smoke_add")
+asm = c.get_riscv_assembly() or ""
+assert asm, "empty assembly"
+print("distilbert amd64 compiler smoke passed")
+PY'
+
+      - name: Build arm64 smoke image
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --platform linux/arm64 \
+            --build-arg BASE_IMAGE="${BASE_IMAGE}:${{ steps.vars.outputs.base_tag }}" \
+            --load \
+            -f Dockerfile.distilbert \
+            -t sarada-distilbert:ci-arm64 .
+
+      - name: Smoke test arm64 image
+        run: |
+          set -euo pipefail
+          docker run --rm --platform linux/arm64 sarada-distilbert:ci-arm64 \
+            python3 -c "import torch; from transformers import AutoTokenizer, AutoModelForSequenceClassification; n='distilbert-base-uncased-finetuned-sst-2-english'; t=AutoTokenizer.from_pretrained(n); m=AutoModelForSequenceClassification.from_pretrained(n).eval(); e=t('This is not a good pizza, instead this is the best', return_tensors='pt'); p=int(m(**e).logits.argmax(-1).item()); print(p)"
+          docker run --rm --platform linux/arm64 sarada-distilbert:ci-arm64 bash -lc '
+            torch-mlir-opt --help | grep -E "convert-torch-to-rice|convert-rice-to-linalg"
+            python3 - <<'"'"'PY'"'"'
+import torch
+from torch_rice import RICERISCVBackend
+
+class Smoke(torch.nn.Module):
+    def forward(self, x):
+        return x + 1
+
+m = Smoke().eval()
+x = torch.randn(2, 4)
+b = RICERISCVBackend(
+    use_rice=True,
+    execution_mode="riscv",
+    vectorization_mode="none",
+    enable_linalg_fusion=True,
+)
+c = b.compile(m, x, func_name="smoke_add")
+asm = c.get_riscv_assembly() or ""
+assert asm, "empty assembly"
+print("distilbert arm64 compiler smoke passed")
+PY'
 
       - name: Build and push multi-arch image
         run: |

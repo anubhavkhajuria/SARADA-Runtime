@@ -66,15 +66,73 @@ jobs:
             --build-arg RICE_REPO="${{ steps.vars.outputs.rice_repo }}" \
             --build-arg RICE_REF="${{ steps.vars.outputs.rice_ref }}" \
             --load \
-            -t sarada:ci .
+            -t sarada:ci-amd64 .
 
       - name: Smoke test amd64 image
         run: |
           set -euo pipefail
-          docker run --rm sarada:ci \
+          docker run --rm sarada:ci-amd64 \
             bash -lc 'torch-mlir-opt --help | grep -E "convert-torch-to-rice|convert-rice-to-linalg"'
-          docker run --rm sarada:ci \
-            python3 -c "import torch, torch_rice; print('torch', torch.__version__); print('has_backend', hasattr(torch_rice, 'RICERISCVBackend'))"
+          docker run --rm sarada:ci-amd64 bash -lc '
+            python3 - <<'"'"'PY'"'"'
+import torch
+from torch_rice import RICERISCVBackend
+
+class Smoke(torch.nn.Module):
+    def forward(self, x):
+        return x + 1
+
+m = Smoke().eval()
+x = torch.randn(2, 4)
+b = RICERISCVBackend(
+    use_rice=True,
+    execution_mode="riscv",
+    vectorization_mode="none",
+    enable_linalg_fusion=True,
+)
+c = b.compile(m, x, func_name="smoke_add")
+asm = c.get_riscv_assembly() or ""
+assert asm, "empty assembly"
+print("amd64 compiler smoke passed")
+PY'
+
+      - name: Build arm64 smoke image
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --platform linux/arm64 \
+            --build-arg RICE_REPO="${{ steps.vars.outputs.rice_repo }}" \
+            --build-arg RICE_REF="${{ steps.vars.outputs.rice_ref }}" \
+            --load \
+            -t sarada:ci-arm64 .
+
+      - name: Smoke test arm64 image
+        run: |
+          set -euo pipefail
+          docker run --rm --platform linux/arm64 sarada:ci-arm64 \
+            bash -lc 'torch-mlir-opt --help | grep -E "convert-torch-to-rice|convert-rice-to-linalg"'
+          docker run --rm --platform linux/arm64 sarada:ci-arm64 bash -lc '
+            python3 - <<'"'"'PY'"'"'
+import torch
+from torch_rice import RICERISCVBackend
+
+class Smoke(torch.nn.Module):
+    def forward(self, x):
+        return x + 1
+
+m = Smoke().eval()
+x = torch.randn(2, 4)
+b = RICERISCVBackend(
+    use_rice=True,
+    execution_mode="riscv",
+    vectorization_mode="none",
+    enable_linalg_fusion=True,
+)
+c = b.compile(m, x, func_name="smoke_add")
+asm = c.get_riscv_assembly() or ""
+assert asm, "empty assembly"
+print("arm64 compiler smoke passed")
+PY'
 
       - name: Build and push multi-arch image
         run: |
